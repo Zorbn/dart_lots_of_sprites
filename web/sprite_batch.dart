@@ -109,10 +109,14 @@ class SpriteBatch {
     var normH = atlasH / (atlas.image.height ?? 1) - padding;
 
     texCoordList.addAll([
-      normX, normY, //                 Texture top left.
-      normX, normY + normH, //         Texture bottom left.
-      normX + normW, normY + normH, // Texture bottom right.
-      normX + normW, normY //          Texture top-right.
+      // Texture top left.
+      normX, normY,
+      // Texture bottom left.
+      normX, normY + normH,
+      // Texture bottom right.
+      normX + normW, normY + normH,
+      // Texture top-right.
+      normX + normW, normY
     ]);
   }
 }
