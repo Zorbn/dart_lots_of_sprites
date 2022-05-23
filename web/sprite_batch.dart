@@ -8,9 +8,9 @@ class SpriteBatch {
   // Prevent different parts of the atlas bleeding into each other.
   static const padding = 0.01;
 
-  final List<double> vertexList = [];
-  final List<double> texCoordList = [];
-  final List<int> indexList = [];
+  final Float32List vertexList;
+  final Float32List texCoordList;
+  final Uint16List indexList;
 
   final Buffer vertexBuffer;
   final Buffer texCoordBuffer;
@@ -20,34 +20,46 @@ class SpriteBatch {
   final Sprite atlas;
   final GlShader shader;
 
-  SpriteBatch(this.gl, this.atlas, this.shader)
+  final int maxSprites;
+
+  int _spriteCount;
+  int _vertexIndex;
+  int _indexIndex;
+  int _texCoordIndex;
+
+  SpriteBatch(this.gl, this.atlas, this.shader, this.maxSprites)
       : vertexBuffer = gl.createBuffer(),
         texCoordBuffer = gl.createBuffer(),
-        indexBuffer = gl.createBuffer();
+        indexBuffer = gl.createBuffer(),
+        vertexList = Float32List(3 * 4 * maxSprites),
+        texCoordList = Float32List(2 * 4 * maxSprites),
+        indexList = Uint16List(6 * maxSprites),
+        _spriteCount = 0,
+        _vertexIndex = 0,
+        _indexIndex = 0,
+        _texCoordIndex = 0;
 
   void startBatch() {
     // Get rid of data from any previous batches.
-    vertexList.clear();
-    texCoordList.clear();
-    indexList.clear();
+    _spriteCount = 0;
+    _vertexIndex = 0;
+    _indexIndex = 0;
+    _texCoordIndex = 0;
   }
 
   void endBatch() {
     // Bind vertex, index, and texture coordinate buffers.
     gl.bindBuffer(WebGL.ARRAY_BUFFER, vertexBuffer);
-    gl.bufferData(WebGL.ARRAY_BUFFER, Float32List.fromList(vertexList),
-        WebGL.STATIC_DRAW);
+    gl.bufferData(WebGL.ARRAY_BUFFER, vertexList, WebGL.STATIC_DRAW);
+    gl.bindBuffer(WebGL.ARRAY_BUFFER, null);
+
+    gl.bindBuffer(WebGL.ARRAY_BUFFER, texCoordBuffer);
+    gl.bufferData(WebGL.ARRAY_BUFFER, texCoordList, WebGL.STATIC_DRAW);
     gl.bindBuffer(WebGL.ARRAY_BUFFER, null);
 
     gl.bindBuffer(WebGL.ELEMENT_ARRAY_BUFFER, indexBuffer);
-    gl.bufferData(WebGL.ELEMENT_ARRAY_BUFFER, Uint16List.fromList(indexList),
-        WebGL.STATIC_DRAW);
+    gl.bufferData(WebGL.ELEMENT_ARRAY_BUFFER, indexList, WebGL.STATIC_DRAW);
     gl.bindBuffer(WebGL.ELEMENT_ARRAY_BUFFER, null);
-
-    gl.bindBuffer(WebGL.ARRAY_BUFFER, texCoordBuffer);
-    gl.bufferData(WebGL.ARRAY_BUFFER, Float32List.fromList(texCoordList),
-        WebGL.STATIC_DRAW);
-    gl.bindBuffer(WebGL.ARRAY_BUFFER, null);
 
     /*
      * Assign buffers to vertex shader attributes.
@@ -78,29 +90,48 @@ class SpriteBatch {
     shader.use(gl);
 
     // Draw!
-    gl.drawElements(WebGL.TRIANGLES, indexList.length, WebGL.UNSIGNED_SHORT, 0);
+    gl.drawElements(WebGL.TRIANGLES, _indexIndex, WebGL.UNSIGNED_SHORT, 0);
+
+    // Unbind indices after drawing.
+    gl.bindBuffer(WebGL.ELEMENT_ARRAY_BUFFER, null);
   }
 
   void addSprite(
       double x, double y, int atlasX, int atlasY, int atlasW, int atlasH) {
-    var vertexCount = vertexList.length ~/ 3;
+    _spriteCount++;
 
-    vertexList.addAll([
-      x - 0.5, y + 0.5, 0.0, // Quad top left.
-      x - 0.5, y - 0.5, 0.0, // Quad bottom left.
-      x + 0.5, y - 0.5, 0.0, // Quad bottom right.
-      x + 0.5, y + 0.5, 0.0, // Quad top right.
-    ]);
+    if (_spriteCount > maxSprites) {
+      throw RangeError(
+          "Can't add $_spriteCount sprites to a batch with a max length of $maxSprites");
+    }
 
-    // Index the latest vertices, by basing new indices on the previous vertex count.
-    indexList.addAll([
-      vertexCount + 3,
-      vertexCount + 2,
-      vertexCount + 1,
-      vertexCount + 3,
-      vertexCount + 1,
-      vertexCount + 0
-    ]);
+    var vertexCount = _vertexIndex ~/ 3;
+
+    // Add vertices, assigning with plain indexing is faster than fancier methods.
+    vertexList[_vertexIndex] = x - 0.5;
+    vertexList[_vertexIndex + 1] = y + 0.5;
+    vertexList[_vertexIndex + 2] = 0.0;
+    vertexList[_vertexIndex + 3] = x - 0.5;
+    vertexList[_vertexIndex + 4] = y - 0.5;
+    vertexList[_vertexIndex + 5] = 0.0;
+    vertexList[_vertexIndex + 6] = x + 0.5;
+    vertexList[_vertexIndex + 7] = y - 0.5;
+    vertexList[_vertexIndex + 8] = 0.0;
+    vertexList[_vertexIndex + 9] = x + 0.5;
+    vertexList[_vertexIndex + 10] = y + 0.5;
+    vertexList[_vertexIndex + 11] = 0.0;
+
+    _vertexIndex += 12;
+
+    // Add indices.
+    indexList[_indexIndex] = vertexCount + 3;
+    indexList[_indexIndex + 1] = vertexCount + 2;
+    indexList[_indexIndex + 2] = vertexCount + 1;
+    indexList[_indexIndex + 3] = vertexCount + 3;
+    indexList[_indexIndex + 4] = vertexCount + 1;
+    indexList[_indexIndex + 5] = vertexCount + 0;
+
+    _indexIndex += 6;
 
     // Normalize pixel coordinates to texture coordinates.
     var normX = atlasX / (atlas.image.width ?? 1) + padding;
@@ -108,15 +139,16 @@ class SpriteBatch {
     var normW = atlasW / (atlas.image.width ?? 1) - padding;
     var normH = atlasH / (atlas.image.height ?? 1) - padding;
 
-    texCoordList.addAll([
-      // Texture top left.
-      normX, normY,
-      // Texture bottom left.
-      normX, normY + normH,
-      // Texture bottom right.
-      normX + normW, normY + normH,
-      // Texture top-right.
-      normX + normW, normY
-    ]);
+    // Add texture coordinates.
+    texCoordList[_texCoordIndex] = normX;
+    texCoordList[_texCoordIndex + 1] = normY;
+    texCoordList[_texCoordIndex + 2] = normX;
+    texCoordList[_texCoordIndex + 3] = normY + normH;
+    texCoordList[_texCoordIndex + 4] = normX + normW;
+    texCoordList[_texCoordIndex + 5] = normY + normH;
+    texCoordList[_texCoordIndex + 6] = normX + normW;
+    texCoordList[_texCoordIndex + 7] = normY;
+
+    _texCoordIndex += 8;
   }
 }

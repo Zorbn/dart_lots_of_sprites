@@ -35,7 +35,7 @@ Sprite atlas = Sprite(gl, "texture.png");
 GlShader shader = GlShader(gl, "default shader", vertCode, fragCode);
 
 // The sprite batch itself.
-SpriteBatch spriteBatch = SpriteBatch(gl, atlas, shader);
+SpriteBatch spriteBatch = SpriteBatch(gl, atlas, shader, 2);
 
 void main() {
   canvas.width = 570;
@@ -54,7 +54,7 @@ void update(num time) {
   // Prepare to add sprites.
   spriteBatch.startBatch();
   // Add sprites.
-  spriteBatch.addSprite(0, 0, 0, 0, 32, 32);
+  spriteBatch.addSprite(-0.5, -0.5, 0, 0, 32, 32);
   spriteBatch.addSprite(0.5, 0.5, 32, 0, 32, 32);
   // Finish and draw the batch.
   spriteBatch.endBatch();
